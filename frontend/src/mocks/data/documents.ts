@@ -1,0 +1,63 @@
+import type { PdfDocument } from "@/features/document/document.interface";
+export const documents: PdfDocument[] = [
+  [
+    "Annual Report 2023.pdf",
+    "Company Financial Report",
+    56,
+    12,
+    "2024-03-15",
+    "pink",
+  ],
+  [
+    "Annual Report 2022.pdf",
+    "Financial Performance",
+    48,
+    8,
+    "2024-02-10",
+    "mint",
+  ],
+  [
+    "Financial Analysis.pdf",
+    "Q3 Analysis and Insights",
+    32,
+    15,
+    "2024-01-28",
+    "purple",
+  ],
+  ["Market Research.pdf", "Industry Trends 2024", 24, 4, "2024-01-20", "blue"],
+  [
+    "Product Strategy.pdf",
+    "Strategic Planning Document",
+    18,
+    1,
+    "2024-01-12",
+    "yellow",
+  ],
+  [
+    "Competitive Analysis.pdf",
+    "Market Competitive Landscape",
+    28,
+    1,
+    "2024-01-05",
+    "pink",
+  ],
+].map((d, i) => ({
+  id: `doc-${i + 1}`,
+  name: String(d[0]),
+  filename: String(d[0]),
+  description: String(d[1]),
+  pages: Number(d[2]),
+  page: Number(d[3]),
+  date: String(d[4]),
+  color: String(d[5]),
+  size: "2.4 MB",
+  analyzed: [0, 1, 4].includes(i),
+  deleted: false,
+  sessionIds: i < 3 ? ["session-1", "session-2", "session-3", "session-4"] : [],
+}));
+documents.push({
+  ...documents[3],
+  id: "deleted-document",
+  name: "Archived Research.pdf",
+  deleted: true,
+});

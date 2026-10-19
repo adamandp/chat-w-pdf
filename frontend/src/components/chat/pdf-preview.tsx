@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { PdfDocument } from "@/types/api";
+import type { PdfDocument } from "@/features/document/document.interface";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";

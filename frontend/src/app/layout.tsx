@@ -1,9 +1,12 @@
+// Cache Components validation cannot inspect the subtree gated by browser MSW readiness.
+export const instant = false;
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { AppProvider } from "@/providers/app-provider";
+import { MockProvider } from "@/providers/mock-provider";
+import { QueryProvider } from "@/providers/query-provider";
+import { WorkspaceProvider } from "@/providers/workspace-provider";
 import "@/styles/globals.css";
-// The browser mock worker initializes before the workspace can render.
-export const instant = false;
+
 export const metadata: Metadata = {
   title: "Chat with PDF",
   description: "Your documents, clearer answers. A mock PDF chat workspace.",
@@ -15,7 +18,13 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
       <body>
-        <AppProvider>{children}</AppProvider>
+        <MockProvider
+          isMocking={process.env.NEXT_PUBLIC_API_MOCKING ?? "enabled"}
+        >
+          <QueryProvider>
+            <WorkspaceProvider>{children}</WorkspaceProvider>
+          </QueryProvider>
+        </MockProvider>
       </body>
     </html>
   );

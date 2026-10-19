@@ -29,7 +29,7 @@ export function ActionMenu({
   iconOnly = false,
 }: ActionMenuProps) {
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger
         render={
           <Button
@@ -41,7 +41,7 @@ export function ActionMenu({
       >
         {label}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side={side}>
+      <DropdownMenuContent align="end" side={side} sideOffset={10}>
         {title && <strong className="menu-title">{title}</strong>}
         {actions.length ? (
           actions.map((a) => (

@@ -1,8 +1,16 @@
 "use client";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import { useWorkspaceSession } from "@/providers/workspace-provider";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import {
   FileText,
+  Search,
   MessageSquare,
   Trash2,
   Plus,
@@ -28,14 +36,22 @@ import { ChatScreen } from "@/components/chat/chat-screen";
 import { DocumentScreen } from "@/components/documents/document-screen";
 import { TrashScreen } from "@/components/trash/trash-screen";
 import { useWorkspace } from "@/hooks/use-workspace";
-import type { PdfDocument } from "@/types/api";
+import type { PdfDocument } from "@/features/document/document.interface";
 const PdfPreview = dynamic(
   () => import("@/components/chat/pdf-preview").then((m) => m.PdfPreview),
   { ssr: false, loading: () => <div className="state">Opening preview…</div> },
 );
 export function WorkspaceApp() {
-  const [screen, setScreen] = useState("Chats");
-  const [sessionId, setSessionId] = useState("session-1");
+  const pathname = usePathname();
+  const router = useRouter();
+  const screen =
+    pathname === "/documents"
+      ? "Documents"
+      : pathname === "/trash"
+        ? "Trash"
+        : "Chats";
+  const [recentSearch, setRecentSearch] = useState("");
+  const [sessionId, setSessionId] = useWorkspaceSession();
   const [drawer, setDrawer] = useState(false);
   const [preview, setPreview] = useState<PdfDocument>();
   const [expanded, setExpanded] = useState(false);
@@ -48,13 +64,16 @@ export function WorkspaceApp() {
   }>();
   const [settings, setSettings] = useState(false);
   const [allChats, setAllChats] = useState(false);
+  
   const w = useWorkspace(sessionId);
   function notify(message: string) {
     setToast(message);
     setTimeout(() => setToast(""), 4000);
   }
   function navigate(next: string) {
-    setScreen(next);
+    router.push(
+      next === "Documents" ? "/documents" : next === "Trash" ? "/trash" : "/",
+    );
     setDrawer(false);
     setPreview(undefined);
   }
@@ -107,58 +126,80 @@ export function WorkspaceApp() {
           </Button>
         ))}
       </nav>
-      <div className="recent-heading">
-        <strong>Recent Chats</strong>
-        <Button variant="ghost" size="sm" onClick={() => setAllChats(true)}>
-          See all
-          <ArrowRight />
-        </Button>
-      </div>
-      <div className="recent-chats">
-        {w.sessions.isPending && <p>Loading chats…</p>}
-        {w.sessions.isError && (
-          <Button onClick={() => w.sessions.refetch()}>Retry chats</Button>
-        )}
-        {w.sessions.data?.slice(0, 4).map((s) => (
-          <div
-            className={`recent-chat ${s.id === sessionId && screen === "Chats" ? "active" : ""}`}
-            key={s.id}
+      <section className="recent-section" aria-label="Recent conversations">
+        <div className="recent-heading">
+          <strong>Recent Chats</strong>
+        </div>
+        <label className="recent-search">
+          <Search aria-hidden="true" />
+          <Input
+            aria-label="Search recent chats"
+            placeholder="Search recent chats…"
+            value={recentSearch}
+            onChange={(e) => setRecentSearch(e.target.value)}
+          />
+        </label>
+        <div className={`recent-chats ${allChats ? "expanded" : ""}`}>
+          {w.sessions.isPending && <p>Loading chats…</p>}
+          {w.sessions.isError && (
+            <Button onClick={() => w.sessions.refetch()}>Retry chats</Button>
+          )}
+          {w.sessions.data
+            ?.filter((s) =>
+              s.title.toLowerCase().includes(recentSearch.toLowerCase()),
+            )
+            .slice(0, allChats ? undefined : 4)
+            .map((s) => (
+              <div
+                className={`recent-chat ${s.id === sessionId && screen === "Chats" ? "active" : ""}`}
+                key={s.id}
+              >
+                <button onClick={() => showSession(s.id)}>
+                  <MessageSquare />
+                  <span>
+                    <strong>{s.title}</strong>
+                    <small>{s.created}</small>
+                  </span>
+                </button>
+                <ActionMenu
+                  iconOnly
+                  label={<MoreHorizontal />}
+                  actions={[
+                    {
+                      label: "Rename",
+                      icon: <Pencil />,
+                      onClick: () => setRename({ id: s.id, title: s.title }),
+                    },
+                    {
+                      label: "Move to Trash",
+                      icon: <Trash2 />,
+                      onClick: () =>
+                        w.remove.mutate(
+                          { kind: "sessions", id: s.id },
+                          {
+                            onSuccess: () => {
+                              if (sessionId === s.id) setSessionId("");
+                            },
+                            onError: () => notify("Could not delete the chat."),
+                          },
+                        ),
+                    },
+                  ]}
+                />
+              </div>
+            ))}
+        </div>
+        <div className="recent-footer">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAllChats(!allChats)}
           >
-            <button onClick={() => showSession(s.id)}>
-              <MessageSquare />
-              <span>
-                <strong>{s.title}</strong>
-                <small>{s.created}</small>
-              </span>
-            </button>
-            <ActionMenu
-              iconOnly
-              label={<MoreHorizontal />}
-              actions={[
-                {
-                  label: "Rename",
-                  icon: <Pencil />,
-                  onClick: () => setRename({ id: s.id, title: s.title }),
-                },
-                {
-                  label: "Move to Trash",
-                  icon: <Trash2 />,
-                  onClick: () =>
-                    w.remove.mutate(
-                      { kind: "sessions", id: s.id },
-                      {
-                        onSuccess: () => {
-                          if (sessionId === s.id) setSessionId("");
-                        },
-                        onError: () => notify("Could not delete the chat."),
-                      },
-                    ),
-                },
-              ]}
-            />
-          </div>
-        ))}
-      </div>
+            {allChats ? "See Less" : "See All"}
+            <ArrowRight />
+          </Button>
+        </div>
+      </section>
       <div className="account">
         <span className="avatar blue">
           <UserRound />
@@ -201,33 +242,79 @@ export function WorkspaceApp() {
       <main
         className={`main-workspace ${preview ? "with-preview" : ""} ${expanded ? "preview-expanded" : ""}`}
       >
-        <div className="primary-screen">
-          {screen === "Chats" ? (
-            <ChatScreen
-              workspace={w}
-              sessionId={sessionId}
-              onSession={setSessionId}
-              onPreview={showPreview}
-              notify={notify}
-            />
-          ) : screen === "Documents" ? (
-            <DocumentScreen workspace={w} onPreview={showPreview} />
-          ) : (
-            <TrashScreen
-              workspace={w}
-              onDelete={(kind, id, name) => setDeleting({ kind, id, name })}
-            />
+        <ResizablePanelGroup className="preview-group" orientation="horizontal">
+          {preview && expanded && (
+            <>
+              {
+                <ResizablePanel
+                  id="pdf"
+                  className="preview-panel"
+                  minSize={expanded ? "60%" : "20%"}
+                  maxSize={expanded ? "80%" : "40%"}
+                  defaultSize={expanded ? "70%" : "30%"}
+                >
+                  <PdfPreview
+                    key={preview.id}
+                    document={preview}
+                    expanded={expanded}
+                    onExpand={() => setExpanded(!expanded)}
+                    onClose={() => setPreview(undefined)}
+                  />
+                </ResizablePanel>
+              }
+            </>
           )}
-        </div>
-        {preview && (
-          <PdfPreview
-            key={preview.id}
-            document={preview}
-            expanded={expanded}
-            onExpand={() => setExpanded(!expanded)}
-            onClose={() => setPreview(undefined)}
-          />
-        )}
+          {preview && expanded && <ResizableHandle className="resize-handle" />}
+          <ResizablePanel
+            key="chat"
+            id="chat"
+            className="primary-screen"
+            minSize={preview && expanded ? "20%" : "60%"}
+            maxSize={preview && expanded ? "40%" : "100%"}
+            defaultSize={preview && expanded ? "30%" : "70%"}
+          >
+            {screen === "Chats" ? (
+              <ChatScreen
+                workspace={w}
+                sessionId={sessionId}
+                onSession={setSessionId}
+                onPreview={showPreview}
+                notify={notify}
+              />
+            ) : screen === "Documents" ? (
+              <DocumentScreen workspace={w} onPreview={showPreview} />
+            ) : (
+              <TrashScreen
+                workspace={w}
+                onDelete={(kind, id, name) => setDeleting({ kind, id, name })}
+              />
+            )}
+          </ResizablePanel>
+          {preview && !expanded && (
+            <ResizableHandle className="resize-handle" />
+          )}
+          {preview && !expanded && (
+            <>
+              {
+                <ResizablePanel
+                  id="pdf"
+                  className="preview-panel"
+                  minSize={expanded ? "60%" : "20%"}
+                  maxSize={expanded ? "80%" : "40%"}
+                  defaultSize={expanded ? "70%" : "30%"}
+                >
+                  <PdfPreview
+                    key={preview.id}
+                    document={preview}
+                    expanded={expanded}
+                    onExpand={() => setExpanded(!expanded)}
+                    onClose={() => setPreview(undefined)}
+                  />
+                </ResizablePanel>
+              }
+            </>
+          )}
+        </ResizablePanelGroup>
       </main>
       {toast && (
         <div className="toast" role="status">
@@ -327,28 +414,6 @@ export function WorkspaceApp() {
             are simulated for UI testing.
           </DialogDescription>
           <Button onClick={() => setSettings(false)}>Got it</Button>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={allChats} onOpenChange={setAllChats}>
-        <DialogContent>
-          <DialogTitle>All chats</DialogTitle>
-          <DialogDescription>Your recent conversations.</DialogDescription>
-          {w.sessions.data?.map((s) => (
-            <Button
-              variant="ghost"
-              key={s.id}
-              onClick={() => {
-                showSession(s.id);
-                setAllChats(false);
-              }}
-            >
-              <MessageSquare />
-              {s.title}
-            </Button>
-          ))}
-          {!w.sessions.data?.length && (
-            <p>No conversations yet. Start a new chat.</p>
-          )}
         </DialogContent>
       </Dialog>
     </div>

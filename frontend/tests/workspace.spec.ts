@@ -46,7 +46,7 @@ test("document search, grid, preview fallback, soft delete and restore", async (
     .getByRole("navigation")
     .getByRole("button", { name: "Documents", exact: true })
     .click();
-  await expect(page.locator(".document-card")).toHaveCount(6);
+  await expect(page.locator(".document-card")).toHaveCount(3);
   await page
     .getByRole("textbox", { name: "Search documents" })
     .fill("Financial Analysis");
@@ -94,7 +94,7 @@ test("mobile drawer and screens fit without horizontal overflow", async ({
     .getByRole("dialog")
     .getByRole("button", { name: "Documents", exact: true })
     .click();
-  await expect(page.locator(".document-card")).toHaveCount(6);
+  await expect(page.locator(".document-card")).toHaveCount(3);
   await page.getByRole("button", { name: "Grid View" }).click();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
@@ -332,14 +332,12 @@ test("tablet library selection, answer mode, and permanent delete confirmation",
     .getByRole("navigation")
     .getByRole("button", { name: "Trash", exact: true })
     .click();
-  const row = page
-    .locator(".trash-row")
-    .filter({
-      has: page.getByRole("heading", {
-        name: "Archived Research.pdf",
-        exact: true,
-      }),
-    });
+  const row = page.locator(".trash-row").filter({
+    has: page.getByRole("heading", {
+      name: "Archived Research.pdf",
+      exact: true,
+    }),
+  });
   await row.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("cannot be undone");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -349,4 +347,127 @@ test("tablet library selection, answer mode, and permanent delete confirmation",
     .getByRole("button", { name: "Delete permanently", exact: true })
     .click();
   await expect(row).toHaveCount(0);
+});
+
+test("revision routes, initial mocked query, dropdown toggle and recent search", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator(".user .message-bubble")).toBeVisible();
+  const trigger = page
+    .locator(".page-header")
+    .getByRole("button", { name: "Documents", exact: true });
+  await trigger.click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await trigger.click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page
+    .getByRole("textbox", { name: "Search recent chats" })
+    .fill("Marketing");
+  await expect(page.locator(".recent-chat")).toHaveCount(1);
+  await page.getByRole("button", { name: "See All", exact: true }).click();
+  await expect(page.locator(".recent-chats")).toHaveClass(/expanded/);
+  await page.getByRole("button", { name: "See Less", exact: true }).click();
+  await expect(page.locator(".recent-chats")).not.toHaveClass(/expanded/);
+  await page.goto("/documents");
+  await expect(page.locator(".document-card")).toHaveCount(3);
+  const pagination = page.getByRole("navigation", {
+    name: "Documents pagination",
+  });
+  await pagination.getByRole("button", { name: "Next" }).click();
+  await expect(pagination).toContainText("Page 2 of 2");
+  await page.getByRole("button", { name: "Grid View" }).click();
+  await expect(pagination).toContainText("Page 2 of 2");
+  await page.getByRole("textbox", { name: "Search documents" }).fill("Annual");
+  await expect(pagination).toContainText("Page 1 of 1");
+  await page.goto("/trash");
+  await expect(
+    page.getByRole("navigation", { name: "sessions history pagination" }),
+  ).toContainText("Page 1");
+  await expect(
+    page.getByRole("navigation", { name: "documents history pagination" }),
+  ).toContainText("Page 1");
+});
+
+test("desktop side panel resize clamps to 20–40 percent in both modes", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator(".source").first().click();
+  const group = page.locator(".preview-group");
+  const handle = page.getByRole("separator");
+  await expect(handle).toBeVisible();
+  for (const expanded of [false, true]) {
+    if (expanded)
+      await page.getByRole("button", { name: "Expand preview" }).click();
+    for (const offset of [-1000, 1000]) {
+      const box = await handle.boundingBox();
+      if (!box) throw new Error("Missing resize handle");
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + offset, box.y + 20);
+      await page.mouse.up();
+      const side = page.locator(
+        expanded ? ".primary-screen" : ".preview-panel",
+      );
+      const fraction =
+        (await side.boundingBox())!.width / (await group.boundingBox())!.width;
+      expect(fraction).toBeGreaterThanOrEqual(0.19);
+      expect(fraction).toBeLessThanOrEqual(0.41);
+    }
+  }
+});
+
+test("history pages change independently after soft deletes", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator(".user .message-bubble")).toBeVisible();
+  await page.evaluate(async () => {
+    for (const domain of ["sessions", "documents"]) {
+      for (let i = 1; i <= 4; i++)
+        await fetch(
+          `/api/${domain}/${domain === "sessions" ? "session" : "doc"}-${i}`,
+          { method: "DELETE" },
+        );
+    }
+  });
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Trash", exact: true })
+    .click();
+  const chats = page.getByRole("navigation", {
+    name: "sessions history pagination",
+  });
+  const docs = page.getByRole("navigation", {
+    name: "documents history pagination",
+  });
+  await expect(chats).toContainText("Page 1 of 2");
+  await expect(docs).toContainText("Page 1 of 2");
+  await chats.getByRole("button", { name: "Next" }).click();
+  await expect(chats).toContainText("Page 2 of 2");
+  await expect(docs).toContainText("Page 1 of 2");
+  await docs.getByRole("button", { name: "Next" }).click();
+  await expect(docs).toContainText("Page 2 of 2");
+  await expect(chats).toContainText("Page 2 of 2");
+});
+
+test("pagination page size and sidebar placement follow the revised design", async ({page}) => {
+ await page.goto("/documents");
+ await expect(page.locator(".document-card")).toHaveCount(3);
+ const footer = page.getByRole("navigation", {name: "Documents pagination"});
+ await footer.getByLabel("Documents pagination rows per page").selectOption("10");
+ await expect(page.locator(".document-card")).toHaveCount(6);
+ await expect(footer.getByRole("button", {name: "Last page"})).toBeDisabled();
+ const section = page.locator(".sidebar .recent-section");
+ const list = await section.locator(".recent-chats").boundingBox();
+ const more = await section.getByRole("button", {name: "See All", exact: true}).boundingBox();
+ expect(more!.y - (list!.y + list!.height)).toBeLessThan(20);
+ expect(more!.x).toBeGreaterThan(list!.x + list!.width / 2);
+ await footer.scrollIntoViewIfNeeded();
+ await page.screenshot({path: "/tmp/revision-documents-desktop.png", fullPage: true});
+ await page.setViewportSize({width: 390, height: 844});
+ expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+ await footer.scrollIntoViewIfNeeded();
+ await page.screenshot({path: "/tmp/revision-documents-mobile.png", fullPage: true});
 });

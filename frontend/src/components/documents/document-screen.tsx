@@ -1,4 +1,6 @@
 "use client";
+import { Pagination } from "@/components/shared/pagination";
+import { usePagedItems } from "@/services/common/pagination.query";
 import { useState } from "react";
 import {
   CalendarDays,
@@ -15,8 +17,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ActionMenu } from "@/components/shared/menu";
 import { Status } from "@/components/shared/status";
+
 import type { Workspace } from "@/hooks/use-workspace";
-import type { PdfDocument } from "@/types/api";
+import type { PdfDocument } from "@/features/document/document.interface";
 export interface DocumentScreenProps {
   workspace: Workspace;
   onPreview: (doc: PdfDocument) => void;
@@ -28,21 +31,23 @@ export function DocumentScreen({
   const [grid, setGrid] = useState(false);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("Last modified");
-  const docs = [...(w.documents.data ?? [])]
-    .filter((d) => d.name.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) =>
-      sort === "Name"
-        ? a.name.localeCompare(b.name)
-        : sort === "Page count"
-          ? b.pages - a.pages
-          : b.date.localeCompare(a.date),
-    );
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(3);
+  const query = usePagedItems<PdfDocument>(
+    "documents",
+    page,
+    search,
+    sort,
+    false,
+    pageSize,
+  );
+  const docs = query.data?.data ?? [];
   return (
     <section className="screen">
       <header className="page-header">
         <div>
           <h1>Documents</h1>
-          <p>{w.documents.data?.length ?? 0} documents • Updated today</p>
+          <p>{query.data?.paging?.totalItems ?? 0} documents • Updated today</p>
         </div>
         <div className="view-toggle">
           <Button
@@ -69,7 +74,10 @@ export function DocumentScreen({
               aria-label="Search documents"
               placeholder="Search documents..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
             />
           </label>
           <ActionMenu
@@ -81,16 +89,19 @@ export function DocumentScreen({
             }
             actions={["Last modified", "Name", "Page count"].map((label) => ({
               label,
-              onClick: () => setSort(label),
+              onClick: () => {
+                setSort(label);
+                setPage(1);
+              },
               selected: sort === label,
             }))}
           />
         </div>
         <Status
-          loading={w.documents.isPending}
-          error={w.documents.isError}
-          empty={!w.documents.isPending && !docs.length}
-          onRetry={() => w.documents.refetch()}
+          loading={query.isPending}
+          error={query.isError}
+          empty={!query.isPending && !docs.length}
+          onRetry={() => query.refetch()}
         >
           No documents match your search.
         </Status>
@@ -146,6 +157,15 @@ export function DocumentScreen({
             </article>
           ))}
         </div>
+        <Pagination
+          label="Documents pagination"
+          paging={query.data?.paging}
+          onPage={setPage}
+          onPageSize={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
       </div>
     </section>
   );
